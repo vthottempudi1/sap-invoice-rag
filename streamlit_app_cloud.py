@@ -135,9 +135,11 @@ with tab1:
     with chat_container:
         for message in st.session_state.chat_history:
             if message["role"] == "user":
-                st.markdown(f'<div class="chat-message user-message"><b>You:</b> {message["content"]}</div>', unsafe_allow_html=True)
+                with st.chat_message("user"):
+                    st.write(message["content"])
             else:
-                st.markdown(f'<div class="chat-message assistant-message"><b>Assistant:</b> {message["content"]}</div>', unsafe_allow_html=True)
+                with st.chat_message("assistant"):
+                    st.write(message["content"])
     
     # Chat input
     col1, col2 = st.columns([6, 1])
