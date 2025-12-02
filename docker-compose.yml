@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      # Basic Configuration
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=your-secure-password
+      
+      # Host Configuration
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      
+      # Encryption
+      - N8N_ENCRYPTION_KEY=2e21c1a4c8e13b275cc6ef1348ab8766
+      
+      # Timezone
+      - GENERIC_TIMEZONE=America/New_York
+      - TZ=America/New_York
+      
+      # Execution Configuration
+      - EXECUTIONS_DATA_SAVE_ON_ERROR=all
+      - EXECUTIONS_DATA_SAVE_ON_SUCCESS=all
+      - EXECUTIONS_DATA_SAVE_MANUAL_EXECUTIONS=true
+      
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n-local-files:/files
+
+volumes:
+  n8n_data:
