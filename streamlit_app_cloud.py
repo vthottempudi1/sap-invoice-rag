@@ -131,50 +131,48 @@ with tab1:
     st.subheader("Ask questions about your invoices")
     
     # Display chat history
-    chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.chat_history:
-            if message["role"] == "user":
-                with st.chat_message("user"):
-                    st.write(message["content"])
-            else:
-                with st.chat_message("assistant"):
-                    st.write(message["content"])
+    for message in st.session_state.chat_history:
+        if message["role"] == "user":
+            with st.chat_message("user"):
+                st.write(message["content"])
+        else:
+            with st.chat_message("assistant"):
+                st.write(message["content"])
     
-    # Chat input
-    col1, col2 = st.columns([6, 1])
-    
-    with col1:
-        user_question = st.text_input(
-            "Type your question here...",
-            key="question_input",
-            placeholder="e.g., How many invoices do we have?"
-        )
-    
-    with col2:
-        send_button = st.button("Send", type="primary", use_container_width=True)
+    # Chat input - automatically clears after submission
+    user_question = st.chat_input("Type your question here... e.g., How many invoices do we have?")
     
     # Process query
-    if send_button and user_question:
-        with st.spinner("🤔 Thinking..."):
-            try:
-                # Call RAG function directly
-                answer = query_invoices(user_question, st.session_state.session_id)
-                
-                # Add to chat history
-                st.session_state.chat_history.append({
-                    "role": "user",
-                    "content": user_question
-                })
-                st.session_state.chat_history.append({
-                    "role": "assistant",
-                    "content": answer
-                })
-                
-                st.rerun()
+    if user_question:
+        # Add user message to history
+        st.session_state.chat_history.append({
+            "role": "user",
+            "content": user_question
+        })
+        
+        # Display user message immediately
+        with st.chat_message("user"):
+            st.write(user_question)
+        
+        # Get and display assistant response
+        with st.chat_message("assistant"):
+            with st.spinner("🤔 Thinking..."):
+                try:
+                    answer = query_invoices(user_question, st.session_state.session_id)
+                    st.write(answer)
                     
-            except Exception as e:
-                st.error(f"Error: {e}")
+                    # Add to chat history
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": answer
+                    })
+                except Exception as e:
+                    error_msg = f"Error: {e}"
+                    st.error(error_msg)
+                    st.session_state.chat_history.append({
+                        "role": "assistant",
+                        "content": error_msg
+                    })
 
 # Tab 2: Date Range Query
 with tab2:
