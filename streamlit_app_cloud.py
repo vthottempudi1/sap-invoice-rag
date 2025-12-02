@@ -6,13 +6,35 @@
 import streamlit as st
 from datetime import datetime, date
 import pandas as pd
+import os
+
+# Set API keys from Streamlit secrets before importing
+if hasattr(st, 'secrets'):
+    try:
+        os.environ["OPENAI_API_KEY"] = st.secrets["OPENAI_API_KEY"]
+        os.environ["PINECONE_API_KEY"] = st.secrets["PINECONE_API_KEY"]
+    except Exception as e:
+        st.error(f"⚠️ Missing API keys in secrets: {e}")
+        st.stop()
 
 # Import directly from the RAG system (no API needed)
+import sap_invoice_rag
 from sap_invoice_rag import (
     query_invoices,
     get_invoice_count,
     get_invoices_by_date_range
 )
+
+# Initialize services with Streamlit secrets
+if hasattr(st, 'secrets'):
+    try:
+        sap_invoice_rag.initialize_services(
+            openai_key=st.secrets["OPENAI_API_KEY"],
+            pinecone_key=st.secrets["PINECONE_API_KEY"]
+        )
+    except Exception as e:
+        st.error(f"⚠️ Failed to initialize services: {e}")
+        st.stop()
 
 # Page config
 st.set_page_config(

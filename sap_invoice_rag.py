@@ -20,35 +20,85 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from pinecone import Pinecone
 
-# Load environment variables from .env file
+# Load environment variables from .env file (for local development)
 load_dotenv()
 
-# Configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "your-openai-api-key")
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "your-pinecone-api-key")
+# Configuration - support both environment variables and direct setting
+def get_api_key(key_name: str, default: str = "") -> str:
+    """Get API key from environment or return default"""
+    return os.getenv(key_name, default)
+
+OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "your-openai-api-key")
+PINECONE_API_KEY = get_api_key("PINECONE_API_KEY", "your-pinecone-api-key")
 PINECONE_INDEX = "n8n-s4hana-new"
 PINECONE_NAMESPACE = "invoice-documents"
 
-# Initialize Pinecone
-pc = Pinecone(api_key=PINECONE_API_KEY)
+# Global variables for lazy initialization
+_pc = None
+_embeddings = None
+_vectorstore = None
+_retriever = None
 
-# Initialize embeddings
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-small",
-    dimensions=512,
-    api_key=OPENAI_API_KEY
-)
+def initialize_services(openai_key: str = None, pinecone_key: str = None):
+    """Initialize services with provided or environment API keys"""
+    global _pc, _embeddings, _vectorstore, _retriever, OPENAI_API_KEY, PINECONE_API_KEY
+    
+    # Use provided keys or fall back to environment/module variables
+    if openai_key:
+        OPENAI_API_KEY = openai_key
+        os.environ["OPENAI_API_KEY"] = openai_key
+    if pinecone_key:
+        PINECONE_API_KEY = pinecone_key
+    
+    # Initialize Pinecone
+    _pc = Pinecone(api_key=PINECONE_API_KEY)
+    
+    # Initialize embeddings
+    _embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        dimensions=512,
+        api_key=OPENAI_API_KEY
+    )
+    
+    # Initialize vector store
+    _vectorstore = PineconeVectorStore(
+        index_name=PINECONE_INDEX,
+        embedding=_embeddings,
+        namespace=PINECONE_NAMESPACE,
+        pinecone_api_key=PINECONE_API_KEY
+    )
+    
+    return _vectorstore
 
-# Initialize vector store
-vectorstore = PineconeVectorStore(
-    index_name=PINECONE_INDEX,
-    embedding=embeddings,
-    namespace=PINECONE_NAMESPACE,
-    pinecone_api_key=PINECONE_API_KEY
-)
+def get_vectorstore():
+    """Get or initialize vectorstore"""
+    global _vectorstore
+    if _vectorstore is None:
+        initialize_services()
+    return _vectorstore
 
-# Create retriever with high k to get all chunks
-retriever = vectorstore.as_retriever(
+# Initialize services on import for backward compatibility
+try:
+    vectorstore = initialize_services()
+except Exception as e:
+    print(f"Warning: Could not initialize services on import: {e}")
+    vectorstore = None
+
+def get_retriever():
+    """Get or create retriever"""
+    global _retriever
+    if _retriever is None:
+        vs = get_vectorstore()
+        if vs:
+            _retriever = vs.as_retriever(
+                search_type="similarity",
+                search_kwargs={"k": 100}
+            )
+    return _retriever
+
+# Create retriever with high k to get all chunks (for backward compatibility)
+if vectorstore:
+    retriever = vectorstore.as_retriever(
     search_kwargs={"k": 50}
 )
 
@@ -161,7 +211,10 @@ from langchain.tools import tool
 def search_invoice_documents(query: str) -> str:
     """Search SAP invoice documents and return summarized results. Each invoice may appear as multiple chunks - automatically deduplicates by ID field. Use this to find invoices, count totals, or filter by criteria. Returns ALL matching invoices with full details."""
     # Retrieve documents
-    docs = retriever.invoke(query)
+    ret = get_retriever()
+    if not ret:
+        return "Error: Retriever not initialized"
+    docs = ret.invoke(query)
     
     # Deduplicate by ID
     unique_invoices = deduplicate_invoices(docs)
@@ -249,24 +302,11 @@ prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad"),
 ])
 
-# Initialize LLM
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.3,
-    api_key=OPENAI_API_KEY
-)
-
-# Create agent
-agent = create_openai_tools_agent(llm, [search_invoice_documents], prompt)
-
-# Create agent executor
-agent_executor = AgentExecutor(
-    agent=agent,
-    tools=[search_invoice_documents],
-    verbose=False,  # Disable verbose output
-    handle_parsing_errors=True,
-    max_iterations=5
-)
+# Global variables for agent
+_llm = None
+_agent = None
+_agent_executor = None
+_agent_with_chat_history = None
 
 # Chat history management
 store = {}
@@ -276,13 +316,47 @@ def get_session_history(session_id: str):
         store[session_id] = ChatMessageHistory()
     return store[session_id]
 
-# Wrap agent with message history
-agent_with_chat_history = RunnableWithMessageHistory(
-    agent_executor,
-    get_session_history,
-    input_messages_key="input",
-    history_messages_key="chat_history",
-)
+def get_agent_with_history():
+    """Get or create agent with chat history"""
+    global _llm, _agent, _agent_executor, _agent_with_chat_history
+    
+    if _agent_with_chat_history is None:
+        # Initialize LLM
+        api_key = os.getenv("OPENAI_API_KEY", OPENAI_API_KEY)
+        _llm = ChatOpenAI(
+            model="gpt-4o-mini",
+            temperature=0.3,
+            api_key=api_key
+        )
+        
+        # Create agent
+        _agent = create_openai_tools_agent(_llm, [search_invoice_documents], prompt)
+        
+        # Create agent executor
+        _agent_executor = AgentExecutor(
+            agent=_agent,
+            tools=[search_invoice_documents],
+            verbose=False,  # Disable verbose output
+            handle_parsing_errors=True,
+            max_iterations=5
+        )
+        
+        # Wrap agent with message history
+        _agent_with_chat_history = RunnableWithMessageHistory(
+            _agent_executor,
+            get_session_history,
+            input_messages_key="input",
+            history_messages_key="chat_history",
+        )
+    
+    return _agent_with_chat_history
+
+# Initialize on import for backward compatibility
+try:
+    agent_with_chat_history = get_agent_with_history()
+except Exception as e:
+    print(f"Warning: Could not initialize agent on import: {e}")
+    agent_with_chat_history = None
 
 
 def query_invoices(question: str, session_id: str = "default") -> str:
@@ -296,7 +370,11 @@ def query_invoices(question: str, session_id: str = "default") -> str:
     Returns:
         AI's response
     """
-    response = agent_with_chat_history.invoke(
+    agent = get_agent_with_history()
+    if not agent:
+        return "Error: Agent not initialized. Please check API keys."
+    
+    response = agent.invoke(
         {"input": question},
         config={"configurable": {"session_id": session_id}}
     )
@@ -312,7 +390,10 @@ def get_invoice_count() -> int:
         Number of unique invoices
     """
     # Query for all invoices
-    docs = retriever.invoke("invoice document financial")
+    ret = get_retriever()
+    if not ret:
+        return 0
+    docs = ret.invoke("invoice document financial")
     
     # Deduplicate
     unique_invoices = deduplicate_invoices(docs)
@@ -332,7 +413,10 @@ def get_invoices_by_date_range(start_date: str, end_date: str) -> List[Dict]:
         List of invoices in the date range
     """
     # Query for all invoices
-    docs = retriever.invoke("invoice document financial")
+    ret = get_retriever()
+    if not ret:
+        return []
+    docs = ret.invoke("invoice document financial")
     
     # Deduplicate
     unique_invoices = deduplicate_invoices(docs)
