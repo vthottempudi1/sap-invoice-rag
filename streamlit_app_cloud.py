@@ -206,7 +206,10 @@ with tab2:
                     # Convert to DataFrame
                     df = pd.DataFrame(invoices)
                     
-                    # Select relevant columns
+                    # Show what columns we have
+                    st.info(f"Available columns: {', '.join(df.columns.tolist())}")
+                    
+                    # Select relevant columns for display
                     display_cols = [
                         'invoiceNumber', 'companyCode', 'fiscalYear',
                         'documentDateConverted', 'amount', 'currency',
@@ -216,23 +219,28 @@ with tab2:
                     # Filter columns that exist
                     available_cols = [col for col in display_cols if col in df.columns]
                     
+                    # Display subset of columns
                     st.dataframe(
-                        df[available_cols],
+                        df[available_cols] if available_cols else df,
                         use_container_width=True,
                         height=400
                     )
                     
-                    # Download button
+                    # Download button - export ALL columns with all data
                     csv = df.to_csv(index=False)
                     st.download_button(
-                        label="📥 Download CSV",
+                        label=f"📥 Download Full CSV ({len(df)} rows, {len(df.columns)} columns)",
                         data=csv,
                         file_name=f"invoices_{start_date}_{end_date}.csv",
                         mime="text/csv"
                     )
+                else:
+                    st.warning("No invoices found in this date range.")
                     
             except Exception as e:
                 st.error(f"Error: {e}")
+                import traceback
+                st.code(traceback.format_exc())
 
 # Footer
 st.markdown("---")
