@@ -139,40 +139,36 @@ with tab1:
             with st.chat_message("assistant"):
                 st.write(message["content"])
     
-    # Chat input - automatically clears after submission
-    user_question = st.chat_input("Type your question here... e.g., How many invoices do we have?")
+    # Chat input - Press Enter to send
+    user_question = st.chat_input("💬 Type your question and press Enter...")
     
-    # Process query
+    # Process query when user submits
     if user_question:
-        # Add user message to history
+        # Add user message to history first
         st.session_state.chat_history.append({
             "role": "user",
             "content": user_question
         })
         
-        # Display user message immediately
-        with st.chat_message("user"):
-            st.write(user_question)
+        # Get assistant response
+        with st.spinner("🤔 Thinking..."):
+            try:
+                answer = query_invoices(user_question, st.session_state.session_id)
+                
+                # Add assistant response to history
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": answer
+                })
+            except Exception as e:
+                error_msg = f"❌ Error: {str(e)}"
+                st.session_state.chat_history.append({
+                    "role": "assistant",
+                    "content": error_msg
+                })
         
-        # Get and display assistant response
-        with st.chat_message("assistant"):
-            with st.spinner("🤔 Thinking..."):
-                try:
-                    answer = query_invoices(user_question, st.session_state.session_id)
-                    st.write(answer)
-                    
-                    # Add to chat history
-                    st.session_state.chat_history.append({
-                        "role": "assistant",
-                        "content": answer
-                    })
-                except Exception as e:
-                    error_msg = f"Error: {e}"
-                    st.error(error_msg)
-                    st.session_state.chat_history.append({
-                        "role": "assistant",
-                        "content": error_msg
-                    })
+        # Rerun to display new messages
+        st.rerun()
 
 # Tab 2: Date Range Query
 with tab2:
