@@ -28,8 +28,8 @@ def get_api_key(key_name: str, default: str = "") -> str:
     """Get API key from environment or return default"""
     return os.getenv(key_name, default)
 
-OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "your-openai-api-key")
-PINECONE_API_KEY = get_api_key("PINECONE_API_KEY", "your-pinecone-api-key")
+OPENAI_API_KEY = get_api_key("OPENAI_API_KEY", "")
+PINECONE_API_KEY = get_api_key("PINECONE_API_KEY", "")
 PINECONE_INDEX = "n8n-s4hana-new"
 PINECONE_NAMESPACE = "invoice-documents"
 
@@ -338,7 +338,7 @@ def get_agent_with_history():
             tools=[search_invoice_documents],
             verbose=False,  # Disable verbose output
             handle_parsing_errors=True,
-            max_iterations=5
+            max_iterations=10  # Increased from 5 to handle complex queries
         )
         
         # Wrap agent with message history

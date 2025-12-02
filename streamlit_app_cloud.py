@@ -116,11 +116,15 @@ with st.sidebar:
     # Example queries
     st.subheader("💡 Example Queries")
     st.markdown("""
+    **Chat Questions:**
     - How many invoices in 2024?
     - Show invoices with company code MF01
     - What are the document types?
     - Invoices from 2025?
     - Show me invoice 5100000000
+    
+    **📥 For CSV Downloads:**
+    Use the "Date Range Query" tab →
     """)
 
 # Main content area with tabs
@@ -129,6 +133,8 @@ tab1, tab2 = st.tabs(["💬 Chat Assistant", "📅 Date Range Query"])
 # Tab 1: Chat Assistant
 with tab1:
     st.subheader("Ask questions about your invoices")
+    
+    st.info("💡 **Tip:** For CSV downloads with full invoice data, use the 'Date Range Query' tab →")
     
     # Display chat history
     for message in st.session_state.chat_history:
