@@ -197,50 +197,58 @@ with tab2:
                     end_date.strftime("%Y-%m-%d")
                 )
                 
-                count = len(invoices)
-                
-                # Display results
-                st.success(f"Found {count} invoices")
-                
-                if count > 0:
-                    # Convert to DataFrame
-                    df = pd.DataFrame(invoices)
-                    
-                    # Show what columns we have
-                    st.info(f"Available columns: {', '.join(df.columns.tolist())}")
-                    
-                    # Select relevant columns for display
-                    display_cols = [
-                        'invoiceNumber', 'companyCode', 'fiscalYear',
-                        'documentDateConverted', 'amount', 'currency',
-                        'documentType'
-                    ]
-                    
-                    # Filter columns that exist
-                    available_cols = [col for col in display_cols if col in df.columns]
-                    
-                    # Display subset of columns
-                    st.dataframe(
-                        df[available_cols] if available_cols else df,
-                        use_container_width=True,
-                        height=400
-                    )
-                    
-                    # Download button - export ALL columns with all data
-                    csv = df.to_csv(index=False)
-                    st.download_button(
-                        label=f"📥 Download Full CSV ({len(df)} rows, {len(df.columns)} columns)",
-                        data=csv,
-                        file_name=f"invoices_{start_date}_{end_date}.csv",
-                        mime="text/csv"
-                    )
-                else:
-                    st.warning("No invoices found in this date range.")
+                # Store in session state to preserve across reruns
+                st.session_state.last_search_results = invoices
+                st.session_state.last_search_dates = (start_date, end_date)
                     
             except Exception as e:
                 st.error(f"Error: {e}")
                 import traceback
                 st.code(traceback.format_exc())
+    
+    # Display results from session state
+    if 'last_search_results' in st.session_state and st.session_state.last_search_results:
+        invoices = st.session_state.last_search_results
+        count = len(invoices)
+        
+        # Display results
+        st.success(f"Found {count} invoices")
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(invoices)
+        
+        # Show what columns we have
+        st.info(f"Available columns: {', '.join(df.columns.tolist())}")
+        
+        # Select relevant columns for display
+        display_cols = [
+            'invoiceNumber', 'companyCode', 'fiscalYear',
+            'documentDateConverted', 'amount', 'currency',
+            'documentType', 'postingDateConverted', 'reference'
+        ]
+        
+        # Filter columns that exist
+        available_cols = [col for col in display_cols if col in df.columns]
+        
+        # Display subset of columns
+        st.dataframe(
+            df[available_cols] if available_cols else df,
+            use_container_width=True,
+            height=400
+        )
+        
+        # Download button - export ALL columns with all data
+        csv = df.to_csv(index=False)
+        search_dates = st.session_state.get('last_search_dates', (start_date, end_date))
+        st.download_button(
+            label=f"📥 Download Full CSV ({len(df)} rows, {len(df.columns)} columns)",
+            data=csv,
+            file_name=f"invoices_{search_dates[0]}_{search_dates[1]}.csv",
+            mime="text/csv",
+            key="download_csv"
+        )
+    elif 'last_search_results' in st.session_state and len(st.session_state.last_search_results) == 0:
+        st.warning("No invoices found in this date range.")
 
 # Footer
 st.markdown("---")
